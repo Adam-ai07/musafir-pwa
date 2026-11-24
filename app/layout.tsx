@@ -18,11 +18,13 @@ const inter = Inter({
   display: "swap",
 });
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const metadata: Metadata = {
   title: "مُسَافِر — Путник в этом мире",
   description: "مُسَافِر (Путник в этом мире) — время намаза, Коран, азкары и хадисы",
   applicationName: "Musafir",
-  manifest: "/manifest.json",
+  manifest: `${basePath}/manifest.json`,
   appleWebApp: {
     capable: true,
     title: "Musafir",
@@ -31,10 +33,10 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: `${basePath}/icon.svg`, type: "image/svg+xml" },
+      { url: `${basePath}/icon-192.png`, sizes: "192x192", type: "image/png" },
     ],
-    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180" }],
+    apple: [{ url: `${basePath}/apple-touch-icon.png`, sizes: "180x180" }],
   },
   other: {
     // Явно — новые версии Next выводят только mobile-web-app-capable

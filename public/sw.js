@@ -1,18 +1,23 @@
-const SHELL_CACHE = "musafir-shell-v3";
+const SHELL_CACHE = "musafir-shell-v4";
 const MEDIA_CACHE = "musafir-offline-v1";
 
-const PRECACHE_URLS = [
-  "/",
-  "/quran",
-  "/azkar",
-  "/hadiths",
-  "/settings",
-  "/manifest.json",
-  "/icon-192.png",
-  "/icon-512.png",
-  "/apple-touch-icon.png",
-  "/icon.svg",
+const PRECACHE_PATHS = [
+  "",
+  "quran/",
+  "azkar/",
+  "hadiths/",
+  "settings/",
+  "manifest.json",
+  "icon-192.png",
+  "icon-512.png",
+  "apple-touch-icon.png",
+  "icon.svg",
 ];
+
+function getPrecacheUrls() {
+  const scope = self.registration?.scope || self.location.origin + "/";
+  return PRECACHE_PATHS.map((p) => new URL(p, scope).href);
+}
 
 /** Текстовые базы данных (Коран, список сур, хадисы аль-Бухари) — кэшируются в фоне после активации */
 const TEXT_DB_URLS = [
@@ -41,7 +46,7 @@ self.addEventListener("install", (event) => {
     caches
       .open(SHELL_CACHE)
       .then((cache) =>
-        Promise.allSettled(PRECACHE_URLS.map((url) => cache.add(url)))
+        Promise.allSettled(getPrecacheUrls().map((url) => cache.add(url)))
       )
       .then(() => self.skipWaiting())
   );
@@ -149,8 +154,9 @@ self.addEventListener("fetch", (event) => {
           return cached;
         }
 
+        const scopeUrl = self.registration?.scope || self.location.origin + "/";
         const networkResponse = await networkPromise;
-        return networkResponse || (await cache.match("/")) || Response.error();
+        return networkResponse || (await cache.match(scopeUrl)) || Response.error();
       })
     );
     return;
