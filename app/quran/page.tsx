@@ -1,0 +1,283 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { BookOpen, ChevronRight, RefreshCw, Search, Sparkles, X } from "lucide-react";
+import {
+  formatAyahCount,
+  formatRevelationType,
+  getSurahRuMeaning,
+  getSurahRuName,
+  LAST_READ_SURAH_KEY,
+  type LastReadSurah,
+  type SurahMeta,
+} from "@/src/data/surahs-ru";
+import { useSettings } from "@/src/context/SettingsContext";
+
+const SURAH_LIST_URL = "https://api.alquran.cloud/v1/surah";
+const SURAH_CACHE_KEY = "noor:surah-list";
+
+function parseLastRead(raw: string | null): LastReadSurah | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (typeof parsed === "number" && parsed >= 1 && parsed <= 114) {
+      return { number: parsed, ruName: getSurahRuName(parsed) };
+    }
+    if (parsed && typeof parsed === "object") {
+      const num = Number(parsed.number ?? parsed.id);
+      if (num >= 1 && num <= 114) {
+        return {
+          number: num,
+          ruName: parsed.ruName || parsed.name || getSurahRuName(num),
+          arabicName: parsed.arabicName,
+          englishName: parsed.englishName,
+          ayah: parsed.ayah ? Number(parsed.ayah) : undefined,
+        };
+      }
+    }
+  } catch {
+    const num = Number(raw);
+    if (num >= 1 && num <= 114) {
+      return { number: num, ruName: getSurahRuName(num) };
+    }
+  }
+  return null;
+}
+
+export default function QuranPage() {
+  const { settings } = useSettings();
+  const isDark = settings.theme === "dark";
+  const [surahs, setSurahs] = useState<SurahMeta[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [lastRead, setLastRead] = useState<LastReadSurah | null>(null);
+
+  useEffect(() => {
+    setLastRead(parseLastRead(localStorage.getItem(LAST_READ_SURAH_KEY)));
+  }, []);
+
+  const loadSurahs = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const cached = localStorage.getItem(SURAH_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length === 114) {
+          setSurahs(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {
+      /* игнорируем повреждённый кэш */
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const res = await fetch(SURAH_LIST_URL, { signal: controller.signal });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      if (json.code !== 200 || !Array.isArray(json.data)) {
+        throw new Error("Некорректный ответ API");
+      }
+      setSurahs(json.data);
+      localStorage.setItem(SURAH_CACHE_KEY, JSON.stringify(json.data));
+    } catch {
+      setSurahs((prev) => {
+        if (prev.length === 0) {
+          setError("Не удалось загрузить список сур. Проверьте подключение к интернету.");
+        }
+        return prev;
+      });
+    } finally {
+      clearTimeout(timer);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadSurahs();
+  }, [loadSurahs]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return surahs;
+
+    return surahs.filter((s) => {
+      const ruName = getSurahRuName(s.number, s.englishName).toLowerCase();
+      const ruMeaning = getSurahRuMeaning(s.number, s.englishNameTranslation).toLowerCase();
+      const enName = s.englishName.toLowerCase();
+      const enTrans = (s.englishNameTranslation ?? "").toLowerCase();
+      const numStr = String(s.number);
+
+      return (
+        numStr === q ||
+        numStr.startsWith(q) ||
+        ruName.includes(q) ||
+        ruMeaning.includes(q) ||
+        enName.includes(q) ||
+        enTrans.includes(q)
+      );
+    });
+  }, [surahs, query]);
+
+  return (
+    <main className="space-y-4 px-4 pt-6">
+      <header className="flex items-center justify-center">
+        <h1 className={`text-3xl font-bold ${isDark ? "text-white" : "text-stone-900"}`}>Коран</h1>
+      </header>
+
+      {/* Карточка «Продолжить чтение» */}
+      {lastRead && (
+        <Link
+          href={`/quran/${lastRead.number}`}
+          className="group relative flex items-center justify-between gap-3 overflow-hidden rounded-2xl border border-emerald-500/40 bg-gradient-to-r from-emerald-900/70 via-emerald-950/70 to-slate-900/90 p-4 shadow-lg shadow-emerald-950/30 transition hover:border-emerald-400 active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-3.5">
+            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/20">
+              <BookOpen className="h-5 w-5" />
+            </span>
+            <div>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-emerald-300">
+                <Sparkles className="h-3.5 w-3.5" />
+                Продолжить чтение
+              </span>
+              <p className="mt-0.5 text-base font-bold text-white">
+                Продолжить чтение: Сура №{lastRead.number} {lastRead.ruName}
+              </p>
+              {lastRead.ayah && (
+                <p className="text-xs text-emerald-200/70">Остановились на аяте {lastRead.ayah}</p>
+              )}
+            </div>
+          </div>
+          <ChevronRight className="h-5 w-5 shrink-0 text-emerald-300 transition group-hover:translate-x-0.5" />
+        </Link>
+      )}
+
+      {/* Строка поиска */}
+      <div className="sticky top-[env(safe-area-inset-top)] z-20 -mx-4 bg-slate-950/90 px-4 py-2 backdrop-blur-lg">
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Поиск по названию или номеру суры (1–114)..."
+            aria-label="Поиск суры"
+            className="w-full rounded-2xl border border-white/10 bg-slate-900/90 py-3 pl-10 pr-10 text-sm text-white placeholder-slate-500 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20"
+          />
+          {query && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Очистить поиск"
+              className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Состояние загрузки */}
+      {loading && surahs.length === 0 && (
+        <div className="space-y-2.5">
+          {Array.from({ length: 8 }).map((_, idx) => (
+            <div
+              key={idx}
+              className="h-20 animate-pulse rounded-2xl border border-white/5 bg-slate-900/80"
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Ошибка */}
+      {error && surahs.length === 0 && (
+        <div className="rounded-2xl border border-amber-500/30 bg-slate-900/80 p-6 text-center">
+          <p className="text-sm text-amber-300">{error}</p>
+          <button
+            type="button"
+            onClick={loadSurahs}
+            className="mx-auto mt-4 flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400"
+          >
+            <RefreshCw className="h-4 w-4" />
+            Повторить
+          </button>
+        </div>
+      )}
+
+      {/* Список сур */}
+      {surahs.length > 0 && (
+        <>
+          {filtered.length === 0 ? (
+            <div className="rounded-2xl border border-white/5 bg-slate-900/60 py-12 text-center">
+              <p className="text-sm text-slate-400">По запросу «{query}» суры не найдены</p>
+            </div>
+          ) : (
+            <ul className="space-y-2.5 pb-4">
+              {filtered.map((surah) => {
+                const ruName = getSurahRuName(surah.number, surah.englishName);
+                const ruMeaning = getSurahRuMeaning(surah.number, surah.englishNameTranslation);
+                const isLastRead = lastRead?.number === surah.number;
+
+                return (
+                  <li key={surah.number}>
+                    <Link
+                      href={`/quran/${surah.number}`}
+                      className={`group flex items-center gap-3.5 rounded-2xl border p-3.5 transition active:scale-[0.99] ${
+                        isLastRead
+                          ? "border-emerald-500/50 bg-slate-900/90"
+                          : "border-white/5 bg-slate-900/80 hover:border-emerald-500/40 hover:bg-slate-900"
+                      }`}
+                    >
+                      {/* Номер суры */}
+                      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-sm font-bold tabular-nums text-emerald-400 transition group-hover:bg-emerald-500 group-hover:text-slate-950">
+                        {surah.number}
+                      </span>
+
+                      {/* Название и мета-информация */}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-baseline justify-between gap-2">
+                          <h2 className="truncate text-base font-semibold text-white">
+                            {ruName}
+                            <span className="ml-1.5 text-xs font-normal text-slate-400">
+                              ({surah.englishName})
+                            </span>
+                          </h2>
+                          <span
+                            dir="rtl"
+                            lang="ar"
+                            className="shrink-0 font-arabic text-lg text-emerald-400"
+                          >
+                            {surah.name}
+                          </span>
+                        </div>
+
+                        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-400">
+                          {ruMeaning && <span className="text-slate-300">{ruMeaning}</span>}
+                          {ruMeaning && <span className="text-slate-600">•</span>}
+                          <span>{formatAyahCount(surah.numberOfAyahs)}</span>
+                          <span className="text-slate-600">•</span>
+                          <span className="rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[11px] font-medium text-emerald-300">
+                            {formatRevelationType(surah.revelationType)}
+                          </span>
+                        </div>
+                      </div>
+
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-600 transition group-hover:translate-x-0.5 group-hover:text-emerald-400" />
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </>
+      )}
+    </main>
+  );
+}
