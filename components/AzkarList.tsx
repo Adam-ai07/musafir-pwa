@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Check, RotateCcw } from "lucide-react";
 import { AZKAR_CATEGORIES, type AzkarCategory, type Zikr } from "@/src/data/azkar";
 import { useSettings, type FontSizeType, type AppSettings } from "@/src/context/SettingsContext";
+import ScrollRevealTranslation from "@/components/ScrollRevealTranslation";
 
 const STORAGE_KEY = "noor:azkar-progress";
 const TAB_KEY = "noor:azkar-tab";
@@ -327,13 +328,15 @@ const ZikrCard = memo(function ZikrCard({
           </p>
         )}
         {settings.showTranslation && zikr.translation && (
-          <p
-            className={`mt-2 whitespace-pre-line text-[15px] leading-relaxed ${
-              isDark ? "text-slate-300" : "text-stone-700"
-            }`}
-          >
-            {zikr.translation}
-          </p>
+          <ScrollRevealTranslation>
+            <p
+              className={`mt-2 whitespace-pre-line text-[15px] leading-relaxed ${
+                isDark ? "text-slate-300" : "text-stone-700"
+              }`}
+            >
+              {zikr.translation}
+            </p>
+          </ScrollRevealTranslation>
         )}
       </div>
 

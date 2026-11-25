@@ -23,6 +23,7 @@ import {
   type LastReadSurah,
 } from "@/src/data/surahs-ru";
 import { useSettings, type FontSizeType } from "@/src/context/SettingsContext";
+import ScrollRevealTranslation from "@/components/ScrollRevealTranslation";
 
 interface MergedAyah {
   number: number;
@@ -605,11 +606,13 @@ export default function SurahReaderPage() {
 
                     {/* Русский перевод Эльмира Кулиева */}
                     {settings.showTranslation && ayah.translation && (
-                      <p className={`mt-4 border-t pt-3.5 text-[15px] leading-relaxed ${
-                        isDark ? "border-white/5 text-slate-300" : "border-stone-200 text-stone-700"
-                      }`}>
-                        {ayah.translation}
-                      </p>
+                      <ScrollRevealTranslation>
+                        <p className={`mt-4 border-t pt-3.5 text-[15px] leading-relaxed ${
+                          isDark ? "border-white/5 text-slate-300" : "border-stone-200 text-stone-700"
+                        }`}>
+                          {ayah.translation}
+                        </p>
+                      </ScrollRevealTranslation>
                     )}
                   </article>
                 </li>
