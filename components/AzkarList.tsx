@@ -32,8 +32,40 @@ export default function AzkarList({ azkar }: { azkar: Zikr[] }) {
   const [tab, setTab] = useState<AzkarCategory>("morning");
   const [progress, setProgress] = useState<Progress>(initial);
   const [hydrated, setHydrated] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
 
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
+  const lastScrollYRef = useRef(0);
+
+  // Плавное скрытие шапки с вкладками и прогрессом при скролле вниз и появление при скролле вверх
+  useEffect(() => {
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY = window.scrollY;
+          const prevY = lastScrollYRef.current;
+          const delta = currentY - prevY;
+
+          if (currentY <= 30) {
+            setShowHeader(true);
+          } else if (delta > 8 && currentY > 60) {
+            setShowHeader(false);
+          } else if (delta < -8) {
+            setShowHeader(true);
+          }
+
+          lastScrollYRef.current = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Загрузка сохранённого прогресса (только на клиенте — без рассинхрона гидратации)
   useEffect(() => {
@@ -58,6 +90,7 @@ export default function AzkarList({ azkar }: { azkar: Zikr[] }) {
   const selectTab = (key: AzkarCategory) => {
     if (key === tab) return;
     setTab(key);
+    setShowHeader(true);
     localStorage.setItem(TAB_KEY, key);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -128,12 +161,17 @@ export default function AzkarList({ azkar }: { azkar: Zikr[] }) {
 
   return (
     <div className="pb-6">
-      {/* Вкладки-фильтры */}
+      {/* Верхняя плавающая панель: вкладки-фильтры + счетчик прогресса и сброс */}
       <div
-        className={`sticky top-[env(safe-area-inset-top)] z-20 -mx-4 px-4 pb-3 pt-2 backdrop-blur-lg transition-colors ${
-          isDark ? "bg-slate-950/90" : "bg-stone-100/90"
+        className={`sticky top-[env(safe-area-inset-top)] z-20 -mx-4 px-4 pb-2.5 pt-2 backdrop-blur-xl transition-all duration-300 ease-in-out will-change-[transform,opacity] ${
+          isDark ? "bg-slate-950/95" : "bg-stone-100/95"
+        } ${
+          showHeader
+            ? "translate-y-0 opacity-100"
+            : "-translate-y-[calc(100%+env(safe-area-inset-top)+14px)] opacity-0 pointer-events-none"
         }`}
       >
+        {/* Вкладки-фильтры */}
         <div
           role="tablist"
           className={`grid grid-cols-4 gap-1 rounded-2xl p-1 ${
@@ -177,32 +215,32 @@ export default function AzkarList({ azkar }: { azkar: Zikr[] }) {
             );
           })}
         </div>
-      </div>
 
-      {/* Верхняя панель прогресса и кнопка «Сбросить прогресс» */}
-      <div className="mb-3 flex items-center justify-between gap-2 px-1">
-        <span className={`text-xs font-medium ${isDark ? "text-slate-400" : "text-stone-500"}`}>
-          Выполнено: <strong className="text-emerald-500">{currentStats.done}</strong> из {currentStats.total}
-        </span>
-        <button
-          type="button"
-          onClick={resetCurrentTab}
-          disabled={!isTabDirty}
-          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
-            isDark
-              ? "border-slate-800 bg-slate-900/80 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-400"
-              : "border-stone-200 bg-white text-stone-700 hover:border-emerald-500/40 hover:text-emerald-600 shadow-xs"
-          }`}
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Сбросить прогресс
-        </button>
+        {/* Счетчики прогресса и кнопка «Сбросить прогресс» */}
+        <div className="mt-2.5 flex items-center justify-between gap-2 px-1">
+          <span className={`text-xs font-medium ${isDark ? "text-slate-400" : "text-stone-500"}`}>
+            Выполнено: <strong className="text-emerald-500">{currentStats.done}</strong> из {currentStats.total}
+          </span>
+          <button
+            type="button"
+            onClick={resetCurrentTab}
+            disabled={!isTabDirty}
+            className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-xs font-medium transition-all duration-200 active:scale-95 disabled:pointer-events-none disabled:opacity-40 ${
+              isDark
+                ? "border-slate-800 bg-slate-900/80 text-slate-300 hover:border-emerald-500/40 hover:text-emerald-400"
+                : "border-stone-200 bg-white text-stone-700 hover:border-emerald-500/40 hover:text-emerald-600 shadow-xs"
+            }`}
+          >
+            <RotateCcw className="h-3.5 w-3.5" />
+            Сбросить прогресс
+          </button>
+        </div>
       </div>
 
       {/* Карточки зикров с плавным появлением при смене вкладки */}
       <ul
         key={tab}
-        className="space-y-4 animate-[fadeIn_0.25s_ease-out]"
+        className="space-y-4 pt-2 animate-[fadeIn_0.25s_ease-out]"
       >
         {list.map((z) => (
           <li
