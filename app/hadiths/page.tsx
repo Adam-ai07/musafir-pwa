@@ -152,6 +152,38 @@ export default function HadithsPage() {
   // Избранное в localStorage
   const [favorites, setFavorites] = useState<HadithItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [showHeader, setShowHeader] = useState(true);
+  const lastScrollYRef = useRef(0);
+
+  // Плавное скрытие шапки со вкладками и поиском при скролле вниз и появление при скролле вверх
+  useEffect(() => {
+    let ticking = false;
+
+    const handleScroll = () => {
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const currentY = window.scrollY;
+          const prevY = lastScrollYRef.current;
+          const delta = currentY - prevY;
+
+          if (currentY <= 30) {
+            setShowHeader(true);
+          } else if (delta > 8 && currentY > 60) {
+            setShowHeader(false);
+          } else if (delta < -8) {
+            setShowHeader(true);
+          }
+
+          lastScrollYRef.current = currentY;
+          ticking = false;
+        });
+        ticking = true;
+      }
+    };
+
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   // Индикатор копирования
   const [copiedUid, setCopiedUid] = useState<string | null>(null);
@@ -316,8 +348,12 @@ export default function HadithsPage() {
       </header>
 
       {/* Переключатель сборников + строка поиска */}
-      <div className={`sticky top-[env(safe-area-inset-top)] z-20 -mx-4 space-y-2.5 px-4 pb-3 pt-2 backdrop-blur-lg ${
+      <div className={`sticky top-[env(safe-area-inset-top)] z-20 -mx-4 space-y-2.5 px-4 pb-3 pt-2 backdrop-blur-xl transition-all duration-300 ease-in-out will-change-[transform,opacity] ${
         isDark ? "bg-slate-950/95" : "bg-stone-100/95"
+      } ${
+        showHeader
+          ? "translate-y-0 opacity-100"
+          : "-translate-y-[calc(100%+env(safe-area-inset-top)+14px)] opacity-0 pointer-events-none"
       }`}>
         <div role="tablist" className={`grid grid-cols-3 gap-1 rounded-2xl p-1 ${
           isDark ? "bg-slate-900" : "bg-stone-200"
@@ -332,6 +368,7 @@ export default function HadithsPage() {
                 aria-selected={active}
                 onClick={() => {
                   if (key === activeTab) return;
+                  setShowHeader(true);
                   startTransition(() => setActiveTab(key));
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }}
@@ -371,6 +408,7 @@ export default function HadithsPage() {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setShowHeader(true)}
             placeholder="Поиск по ключевому слову или номеру хадиса..."
             aria-label="Поиск хадисов"
             className={`w-full rounded-2xl border py-2.5 pl-10 pr-10 text-sm outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 ${
