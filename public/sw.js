@@ -7,6 +7,7 @@ const PRECACHE_PATHS = [
   "azkar/",
   "hadiths/",
   "settings/",
+  "admin/",
   "manifest.json",
   "icon-192.png",
   "icon-512.png",

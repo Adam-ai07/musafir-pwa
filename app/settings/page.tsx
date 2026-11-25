@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import OfflineManager from '../../components/OfflineManager';
 import { useSettings, FontSizeType } from '../../src/context/SettingsContext';
 import {
@@ -15,6 +16,7 @@ import {
     Check,
     Download,
     Share,
+    Lock,
 } from 'lucide-react';
 
 interface BeforeInstallPromptEvent extends Event {
@@ -371,6 +373,17 @@ export default function SettingsPage() {
                         <RotateCcw className="w-4 h-4" />
                         <span>Сбросить настройки по умолчанию</span>
                     </button>
+
+                    <Link
+                        href="/admin"
+                        className={`w-full py-2.5 px-4 rounded-2xl border text-xs font-medium flex items-center justify-center gap-2 transition ${isDark
+                                ? 'border-slate-900 text-slate-500 hover:border-slate-800 hover:text-emerald-400'
+                                : 'border-stone-200 text-stone-400 hover:text-emerald-700'
+                            }`}
+                    >
+                        <Lock className="w-3.5 h-3.5" />
+                        <span>Панель администратора (Обратная связь)</span>
+                    </Link>
                 </div>
             </div>
         </div>

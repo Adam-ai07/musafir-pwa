@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Amiri, Inter } from "next/font/google";
 import BottomNav from "@/components/BottomNav";
+import FeedbackWidget from "@/components/FeedbackWidget";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import { SettingsProvider } from "@/src/context/SettingsContext";
 import "./globals.css";
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="mx-auto min-h-dvh w-full max-w-md pb-[calc(5rem+env(safe-area-inset-bottom))] pt-safe">
             {children}
           </div>
+          <FeedbackWidget />
           <BottomNav />
         </SettingsProvider>
       </body>
