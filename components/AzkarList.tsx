@@ -274,8 +274,8 @@ const ZikrCard = memo(function ZikrCard({
   };
 
   // Параметры SVG-кольца прогресса
-  const size = 64;
-  const strokeWidth = 4.5;
+  const size = 84;
+  const strokeWidth = 5;
   const radius = (size - strokeWidth * 2) / 2;
   const circumference = 2 * Math.PI * radius;
   const strokeDashoffset = circumference * (1 - progressRatio);
@@ -337,17 +337,19 @@ const ZikrCard = memo(function ZikrCard({
         )}
       </div>
 
-      {/* Нижняя панель карточки с источником слева и круговой кнопкой-счётчиком (SVG-кольцом) в правом нижнем углу */}
-      <div className="mt-5 flex items-end justify-between gap-3 pt-2">
-        <div className="min-w-0 flex-1">
-          {zikr.source ? (
-            <p className={`text-xs ${isDark ? "text-slate-500" : "text-stone-400"}`}>{zikr.source}</p>
-          ) : (
-            <span className={`text-xs ${isDark ? "text-slate-500" : "text-stone-400"}`}>
-              {done ? "Зикр завершён" : "Нажмите на счётчик"}
-            </span>
-          )}
-        </div>
+      {/* Нижняя часть карточки: подсказка тонким шрифтом и увеличенный счётчик по центру */}
+      <div className="mt-5 flex flex-col items-center justify-center gap-2 pt-2 text-center">
+        {zikr.source && (
+          <p className={`text-xs ${isDark ? "text-slate-500" : "text-stone-400"}`}>{zikr.source}</p>
+        )}
+
+        <span
+          className={`text-[11px] font-light tracking-wide ${
+            isDark ? "text-slate-400/80" : "text-stone-500/80"
+          }`}
+        >
+          {done ? "Зикр завершён" : "Нажмите на счётчик"}
+        </span>
 
         <button
           type="button"
@@ -355,7 +357,7 @@ const ZikrCard = memo(function ZikrCard({
           onClick={handleCounterClick}
           disabled={done}
           aria-label={done ? "Выполнено" : `Осталось ${remaining} из ${zikr.count}`}
-          className={`group relative flex h-16 w-16 shrink-0 touch-manipulation select-none items-center justify-center rounded-full transition-all duration-200 ease-in-out active:scale-90 ${
+          className={`group relative flex h-[84px] w-[84px] shrink-0 touch-manipulation select-none items-center justify-center rounded-full transition-all duration-200 ease-in-out active:scale-90 ${
             done
               ? "bg-emerald-500/20 text-emerald-400"
               : isDark
@@ -388,11 +390,14 @@ const ZikrCard = memo(function ZikrCard({
           </svg>
 
           {done ? (
-            <Check className="h-6 w-6 text-emerald-400" strokeWidth={3} />
+            <Check className="h-8 w-8 text-emerald-400" strokeWidth={3} />
           ) : (
             <div className="flex flex-col items-center justify-center leading-none tabular-nums">
-              <span className="text-sm font-bold text-emerald-400">
-                {remaining} <span className={`text-[11px] font-medium ${isDark ? "text-slate-400" : "text-stone-500"}`}>/ {zikr.count}</span>
+              <span className="text-lg font-bold text-emerald-400">
+                {remaining}{" "}
+                <span className={`text-xs font-normal ${isDark ? "text-slate-400" : "text-stone-500"}`}>
+                  / {zikr.count}
+                </span>
               </span>
             </div>
           )}
