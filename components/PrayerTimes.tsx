@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, MapPin, RefreshCw } from "lucide-react";
+import { useSettings } from "@/src/context/SettingsContext";
 
 const CITY_NAMES_RU: Record<string, string> = {
   Grozny: "Грозный",
@@ -80,6 +81,8 @@ function formatCountdown(totalSeconds: number) {
 }
 
 export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
+  const { settings } = useSettings();
+  const isDark = settings.theme === "dark";
   const currentCity = city || "Grozny";
   const displayCity = CITY_NAMES_RU[currentCity] || currentCity;
   const apiUrl = `https://api.aladhan.com/v1/timingsByCity?city=${encodeURIComponent(currentCity)}&country=Russia&method=3`;
@@ -147,20 +150,35 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
   }, [data, nowMin, nowSec]);
 
   return (
-    <section className="overflow-hidden rounded-3xl border border-emerald-800/40 bg-gradient-to-br from-emerald-900/60 via-emerald-950/60 to-slate-900 p-5 shadow-lg shadow-emerald-950/40">
+    <section
+      className={`overflow-hidden rounded-3xl border p-5 transition-colors ${
+        isDark
+          ? "border-emerald-800/40 bg-gradient-to-br from-emerald-900/60 via-emerald-950/60 to-slate-900 shadow-lg shadow-emerald-950/40"
+          : "border-stone-200 bg-white shadow-sm"
+      }`}
+    >
       <div className="flex items-start justify-between">
         <div>
-          <div className="flex items-center gap-1.5 text-xs text-emerald-300/80">
+          <div
+            className={`flex items-center gap-1.5 text-xs font-medium ${
+              isDark ? "text-emerald-300/80" : "text-emerald-700"
+            }`}
+          >
             <MapPin className="h-3.5 w-3.5" />
             {displayCity}, Россия
           </div>
           {data && (
-            <p className="mt-1 text-xs text-slate-400">
+            <p className={`mt-1 text-xs ${isDark ? "text-slate-400" : "text-stone-500"}`}>
               {data.date.gregorian.date}
               {data.date.hijri && (
                 <>
                   {" · "}
-                  <span className="font-arabic text-sm text-emerald-200/90" dir="rtl">
+                  <span
+                    className={`font-arabic text-sm ${
+                      isDark ? "text-emerald-200/90" : "text-emerald-700"
+                    }`}
+                    dir="rtl"
+                  >
                     {data.date.hijri.day} {data.date.hijri.month.ar} {data.date.hijri.year}
                   </span>
                 </>
@@ -172,7 +190,11 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
           onClick={load}
           disabled={loading}
           aria-label="Обновить"
-          className="rounded-full p-2 text-emerald-300 transition hover:bg-emerald-500/10 disabled:opacity-50"
+          className={`rounded-full p-2 transition disabled:opacity-50 ${
+            isDark
+              ? "text-emerald-300 hover:bg-emerald-500/10"
+              : "text-emerald-600 hover:bg-emerald-50"
+          }`}
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
         </button>
@@ -180,29 +202,59 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
 
       {loading && !data ? (
         <div className="mt-5 space-y-3">
-          <div className="h-10 w-2/3 animate-pulse rounded-xl bg-emerald-900/40" />
+          <div
+            className={`h-10 w-2/3 animate-pulse rounded-xl ${
+              isDark ? "bg-emerald-900/40" : "bg-stone-200"
+            }`}
+          />
           <div className="grid grid-cols-3 gap-2">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-emerald-900/30" />
+              <div
+                key={i}
+                className={`h-16 animate-pulse rounded-2xl ${
+                  isDark ? "bg-emerald-900/30" : "bg-stone-100"
+                }`}
+              />
             ))}
           </div>
         </div>
       ) : data && next ? (
         <>
           <div className="mt-4">
-            <p className="text-xs uppercase tracking-wider text-slate-400">Следующий намаз</p>
+            <p
+              className={`text-xs uppercase tracking-wider ${
+                isDark ? "text-slate-400" : "text-stone-500"
+              }`}
+            >
+              Следующий намаз
+            </p>
             <div className="mt-1 flex items-end justify-between gap-3">
               <div>
-                <h2 className="text-3xl font-bold text-white">{next.prayer.name}</h2>
-                <p className="font-arabic text-xl text-emerald-300" dir="rtl">
+                <h2 className={`text-3xl font-bold ${isDark ? "text-white" : "text-stone-900"}`}>
+                  {next.prayer.name}
+                </h2>
+                <p
+                  className={`font-arabic text-xl ${
+                    isDark ? "text-emerald-300" : "text-emerald-600"
+                  }`}
+                  dir="rtl"
+                >
                   {next.prayer.ar}
                 </p>
               </div>
               <div className="text-right">
-                <p className="text-2xl font-semibold tabular-nums text-emerald-400">
+                <p
+                  className={`text-2xl font-semibold tabular-nums ${
+                    isDark ? "text-emerald-400" : "text-emerald-600"
+                  }`}
+                >
                   {data.timings[next.prayer.key].slice(0, 5)}
                 </p>
-                <p className="flex items-center justify-end gap-1 text-xs tabular-nums text-slate-400">
+                <p
+                  className={`flex items-center justify-end gap-1 text-xs tabular-nums ${
+                    isDark ? "text-slate-400" : "text-stone-500"
+                  }`}
+                >
                   <Clock className="h-3 w-3" />
                   через {formatCountdown(next.secondsLeft)}
                 </p>
@@ -218,12 +270,38 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
                   key={p.key}
                   className={`rounded-2xl border px-3 py-2.5 text-center transition ${
                     isNext
-                      ? "border-emerald-500 bg-emerald-500/15 shadow-[0_0_20px_-6px] shadow-emerald-500"
-                      : "border-white/5 bg-slate-950/40"
+                      ? isDark
+                        ? "border-emerald-500 bg-emerald-500/15 shadow-[0_0_20px_-6px] shadow-emerald-500"
+                        : "border-emerald-500 bg-emerald-50 shadow-xs"
+                      : isDark
+                      ? "border-white/5 bg-slate-950/40"
+                      : "border-stone-200 bg-stone-50"
                   }`}
                 >
-                  <p className={`text-xs ${isNext ? "text-emerald-300" : "text-slate-400"}`}>{p.name}</p>
-                  <p className={`mt-0.5 text-base font-semibold tabular-nums ${isNext ? "text-white" : "text-slate-200"}`}>
+                  <p
+                    className={`text-xs ${
+                      isNext
+                        ? isDark
+                          ? "text-emerald-300"
+                          : "font-medium text-emerald-700"
+                        : isDark
+                        ? "text-slate-400"
+                        : "text-stone-500"
+                    }`}
+                  >
+                    {p.name}
+                  </p>
+                  <p
+                    className={`mt-0.5 text-base font-semibold tabular-nums ${
+                      isNext
+                        ? isDark
+                          ? "text-white"
+                          : "text-stone-900"
+                        : isDark
+                        ? "text-slate-200"
+                        : "text-stone-800"
+                    }`}
+                  >
                     {data.timings[p.key].slice(0, 5)}
                   </p>
                 </li>
@@ -233,7 +311,15 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
         </>
       ) : null}
 
-      {error && <p className="mt-3 text-center text-xs text-amber-400/90">{error}</p>}
+      {error && (
+        <p
+          className={`mt-3 text-center text-xs ${
+            isDark ? "text-amber-400/90" : "text-amber-600"
+          }`}
+        >
+          {error}
+        </p>
+      )}
     </section>
   );
 }
