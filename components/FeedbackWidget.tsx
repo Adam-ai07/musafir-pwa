@@ -140,15 +140,15 @@ export default function FeedbackWidget() {
         )}
       </button>
 
-      {/* Модальное окно виджета */}
+      {/* Модальное окно виджета (над нижней панелью навигации, со скроллом на мобильных) */}
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 p-3 backdrop-blur-xs sm:items-center animate-[fadeIn_0.2s_ease-out]"
+          className="fixed inset-0 z-[60] flex items-end justify-center bg-black/65 px-3 pt-4 pb-[calc(5.25rem+env(safe-area-inset-bottom))] backdrop-blur-xs sm:items-center sm:p-4 animate-[fadeIn_0.2s_ease-out]"
           onClick={() => setOpen(false)}
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-md overflow-hidden rounded-3xl border shadow-2xl transition-all ${
+            className={`flex max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom))] w-full max-w-md flex-col overflow-hidden rounded-3xl border shadow-2xl transition-all ${
               isDark
                 ? "border-slate-800 bg-slate-900 text-slate-100"
                 : "border-stone-200 bg-white text-stone-900"
@@ -240,8 +240,8 @@ export default function FeedbackWidget() {
               </div>
             </div>
 
-            {/* Тело виджета */}
-            <div className="max-h-[70vh] overflow-y-auto p-5">
+            {/* Тело виджета со скроллом на мобильных устройствах */}
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 pb-6">
               {activeTab === "form" ? (
                 sentSuccess ? (
                   <div className="flex flex-col items-center justify-center py-10 text-center animate-[fadeIn_0.2s_ease-out]">
@@ -299,7 +299,7 @@ export default function FeedbackWidget() {
 
                     <textarea
                       required
-                      rows={4}
+                      rows={3}
                       value={message}
                       onChange={(e) => setMessage(e.target.value)}
                       placeholder="Напишите ваш вопрос, пожелание или сообщите об ошибке..."
