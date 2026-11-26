@@ -76,7 +76,7 @@ export default function QuranPage() {
     }
 
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
+    const timer = setTimeout(() => controller.abort(), 3000);
 
     try {
       const res = await fetch(SURAH_LIST_URL, { signal: controller.signal });
@@ -136,6 +136,7 @@ export default function QuranPage() {
       {lastRead && (
         <Link
           href={`/quran/${lastRead.number}`}
+          prefetch={false}
           className={`group relative flex items-center justify-between gap-3 overflow-hidden rounded-2xl border p-4 transition active:scale-[0.99] ${
             isDark
               ? "border-emerald-500/40 bg-gradient-to-r from-emerald-900/70 via-emerald-950/70 to-slate-900/90 shadow-lg shadow-emerald-950/30 hover:border-emerald-400"
@@ -283,6 +284,7 @@ export default function QuranPage() {
                   <li key={surah.number}>
                     <Link
                       href={`/quran/${surah.number}`}
+                      prefetch={false}
                       className={`group flex items-center gap-3.5 rounded-2xl border p-3.5 transition active:scale-[0.99] ${
                         isLastRead
                           ? isDark

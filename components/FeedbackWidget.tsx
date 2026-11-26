@@ -168,6 +168,7 @@ export default function FeedbackWidget() {
               <div className="flex items-center gap-1.5">
                 <Link
                   href="/admin"
+                  prefetch={false}
                   onClick={() => setOpen(false)}
                   title="Вход для владельца"
                   className={`rounded-xl p-2 text-xs transition ${

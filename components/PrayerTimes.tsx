@@ -94,11 +94,23 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
   const [, setTick] = useState(0);
 
   const load = useCallback(async () => {
-    setLoading(true);
     setError(null);
-    // Таймаут, чтобы виджет не «висел» на скелетоне при медленной сети
+    let cached: AladhanData | null = null;
+    try {
+      cached = JSON.parse(localStorage.getItem(cacheKey) ?? "null");
+    } catch {
+      /* игнорируем повреждённый кэш */
+    }
+    if (cached?.timings) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+
+    // Таймаут 3 секунды, чтобы виджет не висел при блокировках или медленной сети
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 8000);
+    const timer = setTimeout(() => controller.abort(), 3000);
     try {
       const res = await fetch(apiUrl, { cache: "no-store", signal: controller.signal });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -107,15 +119,8 @@ export default function PrayerTimes({ city = "Grozny" }: { city?: string }) {
       setData(json.data);
       localStorage.setItem(cacheKey, JSON.stringify(json.data));
     } catch {
-      let cached: AladhanData | null = null;
-      try {
-        cached = JSON.parse(localStorage.getItem(cacheKey) ?? "null");
-      } catch {
-        /* игнорируем повреждённый кэш */
-      }
       if (cached?.timings) {
         setData(cached);
-        setError("Нет связи с сервером — показано сохранённое расписание");
       } else {
         setData(fallbackData());
         setError("Сервер недоступен — показано примерное расписание");

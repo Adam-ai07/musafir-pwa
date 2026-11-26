@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -281,9 +281,25 @@ export default function SurahReaderPage() {
     setError(null);
 
     const reciter = settings.reciter || "ar.alafasy";
+    const lsCacheKey = `noor:surah-details:${surahId}:${reciter}`;
+    let cachedDetails: SurahDetails | null = null;
+    try {
+      const raw = localStorage.getItem(lsCacheKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as SurahDetails;
+        if (parsed?.number === surahId && Array.isArray(parsed.ayahs) && parsed.ayahs.length > 0) {
+          cachedDetails = parsed;
+          setSurah(parsed);
+          setLoading(false);
+        }
+      }
+    } catch {
+      /* игнорируем повреждённый кэш */
+    }
+
     const url = `https://api.alquran.cloud/v1/surah/${surahId}/editions/quran-uthmani,ru.kuliev,${reciter}`;
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 12000);
+    const timer = setTimeout(() => controller.abort(), 3000);
 
     try {
       const res = await fetch(url, { signal: controller.signal });
@@ -348,7 +364,17 @@ export default function SurahReaderPage() {
 
       setSurah(details);
       saveLastRead(details);
+      try {
+        localStorage.setItem(lsCacheKey, JSON.stringify(details));
+      } catch {
+        /* localStorage переполнен */
+      }
     } catch {
+      if (cachedDetails) {
+        setSurah(cachedDetails);
+        saveLastRead(cachedDetails);
+        return;
+      }
       // Резервный оффлайн-источник: пробуем достать суру из предкэшированных полных баз Корана
       try {
         if (typeof window !== "undefined" && "caches" in window) {
@@ -417,6 +443,7 @@ export default function SurahReaderPage() {
         <div className="flex items-center justify-between gap-2">
           <Link
             href="/quran"
+            prefetch={false}
             className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-medium transition active:scale-95 ${
               isDark
                 ? "border-white/10 bg-slate-900/90 text-slate-200 hover:border-emerald-500/40 hover:text-emerald-300"
@@ -625,6 +652,7 @@ export default function SurahReaderPage() {
             {surah.number > 1 ? (
               <Link
                 href={`/quran/${surah.number - 1}`}
+                prefetch={false}
                 className="flex flex-1 items-center gap-2 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-xs font-medium text-slate-300 transition hover:border-emerald-500/40 hover:text-emerald-300"
               >
                 <ChevronLeft className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -639,6 +667,7 @@ export default function SurahReaderPage() {
             {surah.number < 114 ? (
               <Link
                 href={`/quran/${surah.number + 1}`}
+                prefetch={false}
                 className="flex flex-1 items-center justify-end gap-2 rounded-2xl border border-white/10 bg-slate-900/80 px-4 py-3 text-right text-xs font-medium text-slate-300 transition hover:border-emerald-500/40 hover:text-emerald-300"
               >
                 <span className="truncate">

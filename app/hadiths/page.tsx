@@ -235,9 +235,40 @@ export default function HadithsPage() {
     const meta = COLLECTIONS.find((c) => c.key === key);
     if (!meta?.url) return;
 
+    const lsKey = `noor:hadiths-cache:${key}`;
+    let cachedList: HadithItem[] | null = null;
+    try {
+      const raw = localStorage.getItem(lsKey);
+      if (raw) {
+        const parsed = JSON.parse(raw) as HadithItem[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          cachedList = parsed;
+          cacheRef.current[key] = parsed;
+          setItems(parsed);
+          setLoading(false);
+          if (!force) return;
+        }
+      }
+    } catch {
+      /* игнорируем повреждённый кэш */
+    }
+
+    // Для ан-Навави сразу отдаём встроенную русскую базу без ожидания внешнего CDN
+    if (key === "nawawi" && !force) {
+      const fallback = parseHadiths(
+        nawawiFallback.hadiths as RawHadith[],
+        "nawawi",
+        meta.label
+      );
+      cacheRef.current.nawawi = fallback;
+      setItems(fallback);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 15000);
+    const timer = setTimeout(() => controller.abort(), 3000);
 
     try {
       const res = await fetch(meta.url, { signal: controller.signal });
@@ -248,7 +279,16 @@ export default function HadithsPage() {
 
       cacheRef.current[key] = parsed;
       setItems(parsed);
+      try {
+        localStorage.setItem(lsKey, JSON.stringify(parsed));
+      } catch {
+        /* localStorage переполнен */
+      }
     } catch {
+      if (cachedList && cachedList.length > 0) {
+        setItems(cachedList);
+        return;
+      }
       if (key === "nawawi") {
         // В репозитории fawazahmed0/hadith-api@1 отсутствует файл rus-nawawi.min.json (404),
         // поэтому используем встроенную полную базу из 42 хадисов ан-Навави на русском языке.

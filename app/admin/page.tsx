@@ -188,6 +188,7 @@ export default function AdminFeedbackPage() {
           <div className="text-center">
             <Link
               href="/settings"
+              prefetch={false}
               className={`inline-flex items-center gap-1.5 text-xs ${
                 isDark ? "text-slate-400 hover:text-white" : "text-stone-500 hover:text-stone-900"
               }`}
@@ -208,6 +209,7 @@ export default function AdminFeedbackPage() {
         <div className="flex items-center gap-2.5">
           <Link
             href="/settings"
+            prefetch={false}
             className={`rounded-xl border p-2 ${
               isDark
                 ? "border-slate-800 bg-slate-900 text-slate-300 hover:text-white"

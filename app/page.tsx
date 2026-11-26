@@ -34,6 +34,7 @@ export default function HomePage() {
             <Link
               key={href}
               href={href}
+              prefetch={false}
               className={`group flex items-center gap-4 rounded-2xl border p-4 transition active:scale-[0.98] ${
                 isDark
                   ? "border-white/5 bg-slate-900/60 hover:border-emerald-500/40 hover:bg-slate-900"

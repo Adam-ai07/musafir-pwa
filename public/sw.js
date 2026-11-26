@@ -1,4 +1,4 @@
-const SHELL_CACHE = "musafir-shell-v4";
+const SHELL_CACHE = "musafir-shell-v5";
 const MEDIA_CACHE = "musafir-offline-v1";
 
 const PRECACHE_PATHS = [
@@ -163,53 +163,57 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // 3. Статика приложения (JS, CSS, иконки, шрифты, манифест): Cache-First с фоновым обновлением
-  if (
-    url.origin === self.location.origin &&
-    (url.pathname.startsWith("/_next/static/") ||
-      url.pathname.endsWith(".png") ||
-      url.pathname.endsWith(".svg") ||
-      url.pathname.endsWith(".json") ||
-      url.pathname.endsWith(".woff2"))
-  ) {
+  // 3. Все same-origin запросы (JS, CSS, RSC-переходы страниц, иконки, манифест):
+  // мгновенно отдаём из кэша (Cache-First + фоновое обновление с таймаутом 3с), чтобы переходы не зависали без VPN
+  if (url.origin === self.location.origin) {
     event.respondWith(
       caches.open(SHELL_CACHE).then(async (cache) => {
         const cached = await cache.match(request);
-        const networkPromise = fetch(request)
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        const networkPromise = fetch(request, { signal: controller.signal })
           .then((response) => {
+            clearTimeout(timer);
             if (response.ok) {
               cache.put(request, response.clone());
             }
             return response;
           })
-          .catch(() => cached);
+          .catch(() => {
+            clearTimeout(timer);
+            return cached;
+          });
 
         if (cached) {
           event.waitUntil(networkPromise);
           return cached;
         }
-        return networkPromise;
+        return (await networkPromise) || (await cache.match(request, { ignoreSearch: true })) || Response.error();
       })
     );
     return;
   }
 
-  // 4. Запросы к API (Коран, хадисы, время намаза):
-  // проверяем оффлайн-кэш MEDIA_CACHE -> сеть -> SHELL_CACHE
+  // 4. Запросы к внешним API (Коран, хадисы, время намаза) с таймаутом 3 секунды:
   event.respondWith(
     caches.open(MEDIA_CACHE).then(async (mediaCache) => {
       const offlineHit = await mediaCache.match(request);
       if (offlineHit) return offlineHit;
 
       const shellCache = await caches.open(SHELL_CACHE);
+      const cached = await shellCache.match(request);
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 3000);
       try {
-        const response = await fetch(request);
+        const response = await fetch(request, { signal: controller.signal });
+        clearTimeout(timer);
         if (response.ok) {
           shellCache.put(request, response.clone());
         }
         return response;
       } catch {
-        const cached = await shellCache.match(request);
+        clearTimeout(timer);
         return cached || Response.error();
       }
     })

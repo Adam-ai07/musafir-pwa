@@ -211,12 +211,16 @@ async function pushCloudEvent(payload: CloudEventPayload): Promise<void> {
   if (typeof window === "undefined") return;
   const customUrl = getCustomCloudUrl();
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+
   try {
     if (customUrl) {
       await fetch(customUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
+        signal: controller.signal,
       });
       return;
     }
@@ -224,9 +228,12 @@ async function pushCloudEvent(payload: CloudEventPayload): Promise<void> {
     await fetch(DEFAULT_CLOUD_TOPIC, {
       method: "POST",
       body: JSON.stringify(payload),
+      signal: controller.signal,
     });
   } catch {
     /* Оффлайн-режим: данные уже сохранены в IndexedDB и localStorage */
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -241,10 +248,12 @@ export async function syncFeedbackDatabase(): Promise<FeedbackTicket[]> {
   }
 
   const customUrl = getCustomCloudUrl();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
 
   try {
     if (customUrl) {
-      const res = await fetch(customUrl, { cache: "no-store" });
+      const res = await fetch(customUrl, { cache: "no-store", signal: controller.signal });
       if (res.ok) {
         const data = await res.json();
         const remoteTickets = Array.isArray(data)
@@ -259,6 +268,7 @@ export async function syncFeedbackDatabase(): Promise<FeedbackTicket[]> {
     } else {
       const res = await fetch(`${DEFAULT_CLOUD_TOPIC}/json?poll=1&since=all`, {
         cache: "no-store",
+        signal: controller.signal,
       });
       if (res.ok) {
         const text = await res.text();
@@ -290,6 +300,8 @@ export async function syncFeedbackDatabase(): Promise<FeedbackTicket[]> {
     }
   } catch {
     /* Оффлайн: возвращаем локальную БД */
+  } finally {
+    clearTimeout(timer);
   }
 
   saveLocalTickets(current);

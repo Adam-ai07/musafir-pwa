@@ -376,6 +376,7 @@ export default function SettingsPage() {
 
                     <Link
                         href="/admin"
+                        prefetch={false}
                         className={`w-full py-2.5 px-4 rounded-2xl border text-xs font-medium flex items-center justify-center gap-2 transition ${isDark
                                 ? 'border-slate-900 text-slate-500 hover:border-slate-800 hover:text-emerald-400'
                                 : 'border-stone-200 text-stone-400 hover:text-emerald-700'
