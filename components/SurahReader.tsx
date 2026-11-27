@@ -44,6 +44,41 @@ interface SurahDetails {
 }
 
 const OFFLINE_CACHE_NAME = "musafir-offline-v1";
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
+interface LocalSurahJson {
+  number: number;
+  name: string;
+  englishName: string;
+  englishNameTranslation: string;
+  revelationType: string;
+  numberOfAyahs: number;
+  ayahs: Array<{
+    number: number;
+    numberInSurah: number;
+    arabic: string;
+    translation: string;
+    audio?: string;
+  }>;
+}
+
+function buildSurahDetailsFromLocal(raw: LocalSurahJson, reciter: string): SurahDetails {
+  return {
+    number: raw.number,
+    name: raw.name,
+    englishName: raw.englishName,
+    englishNameTranslation: raw.englishNameTranslation,
+    revelationType: raw.revelationType,
+    numberOfAyahs: raw.numberOfAyahs || raw.ayahs.length,
+    ayahs: raw.ayahs.map((a) => ({
+      number: a.number,
+      numberInSurah: a.numberInSurah,
+      arabic: a.arabic,
+      translation: a.translation,
+      audio: `https://cdn.islamic.network/quran/audio/128/${reciter}/${a.number}.mp3`,
+    })),
+  };
+}
 
 /** Фоновое сохранение одного аудиофайла в Cache API без блокировки воспроизведения */
 async function cacheAudioInBackground(audioUrl: string) {
@@ -94,6 +129,7 @@ export default function SurahReaderPage() {
   const [surah, setSurah] = useState<SurahDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
 
   // Состояние аудиоплеера
   const [activeAyah, setActiveAyah] = useState<number | null>(null);
@@ -279,6 +315,7 @@ export default function SurahReaderPage() {
     setPlayAll(false);
     setLoading(true);
     setError(null);
+    setErrorDetails(null);
 
     const reciter = settings.reciter || "ar.alafasy";
     const lsCacheKey = `noor:surah-details:${surahId}:${reciter}`;
@@ -297,7 +334,57 @@ export default function SurahReaderPage() {
       /* игнорируем повреждённый кэш */
     }
 
+    // 1. В первую очередь берём текст суры (арабский + русский перевод) из локального JSON в public/data/
+    const localSurahUrl = `${BASE_PATH}/data/surahs/${surahId}.json`;
+    const localAllQuranUrl = `${BASE_PATH}/data/quran.json`;
+    let lastAttemptedUrl = localSurahUrl;
+
+    try {
+      const localRes = await fetch(localSurahUrl);
+      if (localRes.ok) {
+        const localJson = (await localRes.json()) as LocalSurahJson;
+        if (localJson?.number === surahId && Array.isArray(localJson.ayahs)) {
+          const details = buildSurahDetailsFromLocal(localJson, reciter);
+          setSurah(details);
+          saveLastRead(details);
+          setLoading(false);
+          try {
+            localStorage.setItem(lsCacheKey, JSON.stringify(details));
+          } catch {
+            /* ignore quota */
+          }
+          return;
+        }
+      }
+
+      // Фолбэк на общий локальный файл public/data/quran.json (все 114 сур)
+      lastAttemptedUrl = localAllQuranUrl;
+      const allRes = await fetch(localAllQuranUrl);
+      if (allRes.ok) {
+        const allList = (await allRes.json()) as LocalSurahJson[];
+        const found = Array.isArray(allList)
+          ? allList.find((s) => s.number === surahId)
+          : undefined;
+        if (found && Array.isArray(found.ayahs)) {
+          const details = buildSurahDetailsFromLocal(found, reciter);
+          setSurah(details);
+          saveLastRead(details);
+          setLoading(false);
+          try {
+            localStorage.setItem(lsCacheKey, JSON.stringify(details));
+          } catch {
+            /* ignore quota */
+          }
+          return;
+        }
+      }
+    } catch {
+      /* Если локальные файлы недоступны — переходим к внешнему HTTPS API */
+    }
+
+    // 2. Внешний API строго по https:// без кастомных заголовков (чтобы не вызывать CORS preflight в Safari на iOS)
     const url = `https://api.alquran.cloud/v1/surah/${surahId}/editions/quran-uthmani,ru.kuliev,${reciter}`;
+    lastAttemptedUrl = url;
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
 
@@ -369,7 +456,8 @@ export default function SurahReaderPage() {
       } catch {
         /* localStorage переполнен */
       }
-    } catch {
+    } catch (err) {
+      const techMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       if (cachedDetails) {
         setSurah(cachedDetails);
         saveLastRead(cachedDetails);
@@ -419,6 +507,7 @@ export default function SurahReaderPage() {
         /* ignore offline fallback error */
       }
       setError("Не удалось загрузить суру. Проверьте подключение к интернету.");
+      setErrorDetails(`${techMsg} · URL: ${lastAttemptedUrl}`);
     } finally {
       clearTimeout(timer);
       setLoading(false);
@@ -522,6 +611,11 @@ export default function SurahReaderPage() {
       {error && !loading && (
         <div className="rounded-3xl border border-amber-500/30 bg-slate-900/80 p-6 text-center">
           <p className="text-sm text-amber-300">{error}</p>
+          {errorDetails && (
+            <p className="mt-2 break-all font-mono text-[11px] text-amber-200/75">
+              {errorDetails}
+            </p>
+          )}
           <button
             type="button"
             onClick={loadSurah}

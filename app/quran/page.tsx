@@ -14,6 +14,8 @@ import {
 } from "@/src/data/surahs-ru";
 import { useSettings } from "@/src/context/SettingsContext";
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+const LOCAL_SURAH_LIST_URL = `${BASE_PATH}/data/surahs.json`;
 const SURAH_LIST_URL = "https://api.alquran.cloud/v1/surah";
 const SURAH_CACHE_KEY = "noor:surah-list";
 
@@ -51,6 +53,7 @@ export default function QuranPage() {
   const [surahs, setSurahs] = useState<SurahMeta[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [errorDetails, setErrorDetails] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [lastRead, setLastRead] = useState<LastReadSurah | null>(null);
 
@@ -61,6 +64,7 @@ export default function QuranPage() {
   const loadSurahs = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setErrorDetails(null);
 
     try {
       const cached = localStorage.getItem(SURAH_CACHE_KEY);
@@ -75,6 +79,23 @@ export default function QuranPage() {
       /* игнорируем повреждённый кэш */
     }
 
+    // 1. В первую очередь загружаем список всех 114 сур из локального JSON в public/data/surahs.json
+    try {
+      const localRes = await fetch(LOCAL_SURAH_LIST_URL);
+      if (localRes.ok) {
+        const localData = await localRes.json();
+        if (Array.isArray(localData) && localData.length === 114) {
+          setSurahs(localData);
+          localStorage.setItem(SURAH_CACHE_KEY, JSON.stringify(localData));
+          setLoading(false);
+          return;
+        }
+      }
+    } catch {
+      /* переходим к внешнему API по https:// */
+    }
+
+    // 2. Резервный запрос к внешнему API строго по https:// без лишних CORS-заголовков
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
 
@@ -87,10 +108,12 @@ export default function QuranPage() {
       }
       setSurahs(json.data);
       localStorage.setItem(SURAH_CACHE_KEY, JSON.stringify(json.data));
-    } catch {
+    } catch (err) {
+      const techMsg = err instanceof Error ? `${err.name}: ${err.message}` : String(err);
       setSurahs((prev) => {
         if (prev.length === 0) {
           setError("Не удалось загрузить список сур. Проверьте подключение к интернету.");
+          setErrorDetails(`${techMsg} · URL: ${SURAH_LIST_URL}`);
         }
         return prev;
       });
@@ -247,6 +270,9 @@ export default function QuranPage() {
           }`}
         >
           <p className={`text-sm ${isDark ? "text-amber-300" : "text-amber-700"}`}>{error}</p>
+          {errorDetails && (
+            <p className="mt-1.5 break-all font-mono text-[11px] opacity-75">{errorDetails}</p>
+          )}
           <button
             type="button"
             onClick={loadSurahs}

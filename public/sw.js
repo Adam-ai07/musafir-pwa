@@ -1,4 +1,4 @@
-const SHELL_CACHE = "musafir-shell-v5";
+const SHELL_CACHE = "musafir-shell-v6";
 const MEDIA_CACHE = "musafir-offline-v1";
 
 const PRECACHE_PATHS = [
@@ -8,6 +8,8 @@ const PRECACHE_PATHS = [
   "hadiths/",
   "settings/",
   "admin/",
+  "data/surahs.json",
+  "data/quran.json",
   "manifest.json",
   "icon-192.png",
   "icon-512.png",
