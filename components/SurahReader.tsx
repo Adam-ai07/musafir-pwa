@@ -62,7 +62,14 @@ interface LocalSurahJson {
   }>;
 }
 
-function buildSurahDetailsFromLocal(raw: LocalSurahJson, reciter: string): SurahDetails {
+/** Формирование ссылки на EveryAyah CDN строго по формату 3-digit surah + 3-digit ayah */
+function getAyahAudioUrl(surahNumber: number, ayahNumberInSurah: number): string {
+  const surahPad = String(surahNumber).padStart(3, "0");
+  const ayahPad = String(ayahNumberInSurah).padStart(3, "0");
+  return `https://everyayah.com/data/Alafasy_128kbps/${surahPad}${ayahPad}.mp3`;
+}
+
+function buildSurahDetailsFromLocal(raw: LocalSurahJson): SurahDetails {
   return {
     number: raw.number,
     name: raw.name,
@@ -75,7 +82,7 @@ function buildSurahDetailsFromLocal(raw: LocalSurahJson, reciter: string): Surah
       numberInSurah: a.numberInSurah,
       arabic: a.arabic,
       translation: a.translation,
-      audio: `https://cdn.islamic.network/quran/audio/128/${reciter}/${a.number}.mp3`,
+      audio: getAyahAudioUrl(raw.number, a.numberInSurah),
     })),
   };
 }
@@ -136,6 +143,7 @@ export default function SurahReaderPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [audioLoading, setAudioLoading] = useState(false);
   const [playAll, setPlayAll] = useState(false);
+  const [audioToast, setAudioToast] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const playAllRef = useRef(playAll);
@@ -144,6 +152,17 @@ export default function SurahReaderPage() {
   surahRef.current = surah;
   const activeAyahRef = useRef<number | null>(null);
   activeAyahRef.current = activeAyah;
+  const isPlayingRef = useRef(isPlaying);
+  isPlayingRef.current = isPlaying;
+  const toastTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showAudioToast = useCallback((msg = "Не удалось воспроизвести аудио") => {
+    setAudioToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setAudioToast(null);
+    }, 3500);
+  }, []);
 
   // Сохранение последней прочитанной суры в localStorage
   const saveLastRead = useCallback((details: SurahDetails, ayahNum?: number) => {
@@ -161,24 +180,57 @@ export default function SurahReaderPage() {
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
-      audioRef.current.src = "";
+      try {
+        audioRef.current.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+      audioRef.current.removeAttribute("src");
+      audioRef.current.load();
     }
     setIsPlaying(false);
     setAudioLoading(false);
+    setPlayAll(false);
+    playAllRef.current = false;
   }, []);
 
   useEffect(() => {
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
-        audioRef.current.src = "";
+        try {
+          audioRef.current.currentTime = 0;
+        } catch {
+          /* ignore */
+        }
+        audioRef.current.removeAttribute("src");
+      }
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
       }
     };
   }, []);
 
+  // Обработчики событий аудио
+  const handleAudioPlaying = useCallback(() => {
+    setIsPlaying(true);
+    setAudioLoading(false);
+  }, []);
+
+  const handleAudioPause = useCallback(() => {
+    setIsPlaying(false);
+    setAudioLoading(false);
+  }, []);
+
+  const handleAudioError = useCallback(() => {
+    setIsPlaying(false);
+    setAudioLoading(false);
+    showAudioToast("Не удалось воспроизвести аудио");
+  }, [showAudioToast]);
+
   // Воспроизведение конкретного аята по его номеру в суре (1..N)
   const playAyah = useCallback(
-    (numberInSurah: number, continuous?: boolean) => {
+    async (numberInSurah: number, continuous?: boolean) => {
       const currentSurah = surahRef.current;
       if (!currentSurah) return;
 
@@ -194,36 +246,65 @@ export default function SurahReaderPage() {
         playAllRef.current = continuous;
       }
 
-      if (!audioRef.current) {
-        audioRef.current = new Audio();
-        audioRef.current.preload = "auto";
+      let audio = audioRef.current;
+      if (!audio && typeof document !== "undefined") {
+        audio = document.getElementById("surah-global-audio") as HTMLAudioElement | null;
+        if (audio) {
+          audioRef.current = audio;
+        }
+      }
+      if (!audio) {
+        audio = new Audio();
+        audio.preload = "auto";
+        audioRef.current = audio;
       }
 
-      const audio = audioRef.current;
+      audio.onplaying = handleAudioPlaying;
+      audio.onpause = handleAudioPause;
+      audio.onerror = handleAudioError;
+      audio.onended = () => {
+        const s = surahRef.current;
+        const curr = activeAyahRef.current;
+        if (playAllRef.current && s && curr && curr < s.numberOfAyahs) {
+          void playAyah(curr + 1, true);
+        } else {
+          setIsPlaying(false);
+          setAudioLoading(false);
+          setPlayAll(false);
+          playAllRef.current = false;
+        }
+      };
 
       // Если этот же аят уже выбран — переключаем паузу/воспроизведение
       if (activeAyahRef.current === numberInSurah && audio.src === target.audio) {
-        if (audio.paused) {
-          setAudioLoading(true);
-          audio
-            .play()
-            .then(() => {
-              setIsPlaying(true);
-              setAudioLoading(false);
-            })
-            .catch(() => {
-              setIsPlaying(false);
-              setAudioLoading(false);
-            });
-        } else {
+        if (isPlayingRef.current) {
           audio.pause();
           setIsPlaying(false);
+          setAudioLoading(false);
+        } else {
+          setAudioLoading(true);
+          try {
+            await audio.play();
+          } catch (err: unknown) {
+            const isAbort = err instanceof DOMException && err.name === "AbortError";
+            if (!isAbort) {
+              setIsPlaying(false);
+              setAudioLoading(false);
+              showAudioToast("Не удалось воспроизвести аудио");
+            }
+          }
         }
         return;
       }
 
-      // Переключаемся на новый аят
+      // Переключаемся на новый аят: останавливаем текущий, сбрасываем время в 0
       audio.pause();
+      try {
+        audio.currentTime = 0;
+      } catch {
+        /* ignore */
+      }
+
       setActiveAyah(numberInSurah);
       activeAyahRef.current = numberInSurah;
       setAudioLoading(true);
@@ -238,47 +319,35 @@ export default function SurahReaderPage() {
       }
 
       audio.src = target.audio;
-      // Автоматически сохраняем воспроизводимый аудиофайл в Cache API для оффлайн-прослушивания
-      void cacheAudioInBackground(target.audio);
-      audio.onplaying = () => {
-        setIsPlaying(true);
-        setAudioLoading(false);
-      };
-      audio.onpause = () => {
-        setIsPlaying(false);
-      };
-      audio.onerror = () => {
-        setIsPlaying(false);
-        setAudioLoading(false);
-      };
-      audio.onended = () => {
-        const s = surahRef.current;
-        const curr = activeAyahRef.current;
-        if (playAllRef.current && s && curr && curr < s.numberOfAyahs) {
-          playAyah(curr + 1, true);
-        } else {
-          setIsPlaying(false);
-          setPlayAll(false);
-          playAllRef.current = false;
-        }
-      };
+      audio.load();
 
-      audio.play().catch(() => {
-        setIsPlaying(false);
-        setAudioLoading(false);
-      });
+      // Автоматически сохраняем аудиофайл в Cache API для оффлайн-прослушивания
+      void cacheAudioInBackground(target.audio);
+
+      try {
+        await audio.play();
+      } catch (err: unknown) {
+        const isAbort = err instanceof DOMException && err.name === "AbortError";
+        if (!isAbort) {
+          setIsPlaying(false);
+          setAudioLoading(false);
+          showAudioToast("Не удалось воспроизвести аудио");
+        }
+      }
     },
-    [saveLastRead, settings.vibration]
+    [handleAudioError, handleAudioPause, handleAudioPlaying, saveLastRead, settings.vibration, showAudioToast]
   );
 
   // Кнопка «Слушать всю суру подряд»
-  const togglePlayAll = () => {
-    if (!surah) return;
+  const togglePlayAll = useCallback(() => {
+    if (!surah || !surah.ayahs.length) return;
 
-    if (playAll && isPlaying) {
-      // Если уже играет вся сура — ставим на паузу и выключаем режим
-      audioRef.current?.pause();
+    if (playAll && (isPlaying || audioLoading)) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
       setIsPlaying(false);
+      setAudioLoading(false);
       setPlayAll(false);
       playAllRef.current = false;
       return;
@@ -287,20 +356,9 @@ export default function SurahReaderPage() {
     const startFrom = activeAyah ?? 1;
     setPlayAll(true);
     playAllRef.current = true;
-    // Фоново кэшируем все аудиофайлы текущей суры в Cache API
     void cacheSurahAudioInBackground(surah);
-
-    if (activeAyah === startFrom && audioRef.current && audioRef.current.src) {
-      if (audioRef.current.paused) {
-        audioRef.current
-          .play()
-          .then(() => setIsPlaying(true))
-          .catch(() => setIsPlaying(false));
-      }
-    } else {
-      playAyah(startFrom, true);
-    }
-  };
+    void playAyah(startFrom, true);
+  }, [activeAyah, audioLoading, isPlaying, playAll, playAyah, surah]);
 
   // Загрузка суры в трёх редакциях одним запросом
   const loadSurah = useCallback(async () => {
@@ -325,6 +383,10 @@ export default function SurahReaderPage() {
       if (raw) {
         const parsed = JSON.parse(raw) as SurahDetails;
         if (parsed?.number === surahId && Array.isArray(parsed.ayahs) && parsed.ayahs.length > 0) {
+          parsed.ayahs = parsed.ayahs.map((a) => ({
+            ...a,
+            audio: getAyahAudioUrl(parsed.number, a.numberInSurah),
+          }));
           cachedDetails = parsed;
           setSurah(parsed);
           setLoading(false);
@@ -344,7 +406,7 @@ export default function SurahReaderPage() {
       if (localRes.ok) {
         const localJson = (await localRes.json()) as LocalSurahJson;
         if (localJson?.number === surahId && Array.isArray(localJson.ayahs)) {
-          const details = buildSurahDetailsFromLocal(localJson, reciter);
+          const details = buildSurahDetailsFromLocal(localJson);
           setSurah(details);
           saveLastRead(details);
           setLoading(false);
@@ -366,7 +428,7 @@ export default function SurahReaderPage() {
           ? allList.find((s) => s.number === surahId)
           : undefined;
         if (found && Array.isArray(found.ayahs)) {
-          const details = buildSurahDetailsFromLocal(found, reciter);
+          const details = buildSurahDetailsFromLocal(found);
           setSurah(details);
           saveLastRead(details);
           setLoading(false);
@@ -417,18 +479,10 @@ export default function SurahReaderPage() {
         editions.find((e) => e.edition?.identifier === "quran-uthmani") ?? editions[0];
       const kuliev =
         editions.find((e) => e.edition?.identifier === "ru.kuliev") ?? editions[1];
-      const alafasy =
-        editions.find((e) => e.edition?.identifier === reciter) ?? editions[2];
 
       const ruMap = new Map<number, string>();
       for (const a of kuliev.ayahs) {
         ruMap.set(a.numberInSurah, a.text);
-      }
-
-      const audioMap = new Map<number, string>();
-      for (const a of alafasy.ayahs) {
-        const audioUrl = a.audio || a.audioSecondary?.[0] || "";
-        audioMap.set(a.numberInSurah, audioUrl);
       }
 
       const mergedAyahs: MergedAyah[] = uthmani.ayahs.map((a) => ({
@@ -436,7 +490,7 @@ export default function SurahReaderPage() {
         numberInSurah: a.numberInSurah,
         arabic: a.text,
         translation: ruMap.get(a.numberInSurah) ?? "",
-        audio: audioMap.get(a.numberInSurah) ?? "",
+        audio: getAyahAudioUrl(uthmani.number, a.numberInSurah),
       }));
 
       const details: SurahDetails = {
@@ -486,7 +540,7 @@ export default function SurahReaderPage() {
                 numberInSurah: a.numberInSurah,
                 arabic: a.text,
                 translation: ruMap.get(a.numberInSurah) ?? "",
-                audio: `https://cdn.islamic.network/quran/audio/128/${reciter}/${a.number}.mp3`,
+                audio: getAyahAudioUrl(arSurah.number, a.numberInSurah),
               }));
               const details: SurahDetails = {
                 number: arSurah.number,
@@ -525,6 +579,28 @@ export default function SurahReaderPage() {
 
   return (
     <main className={`space-y-4 px-4 pt-4 ${isDark ? "text-slate-100" : "text-stone-900"}`}>
+      {/* Единый глобальный управляемый HTMLAudioElement для стабильной работы звука в iOS Safari и PWA */}
+      <audio
+        id="surah-global-audio"
+        ref={audioRef}
+        preload="auto"
+        playsInline
+        className="hidden"
+        onPlaying={handleAudioPlaying}
+        onPause={handleAudioPause}
+        onError={handleAudioError}
+      />
+
+      {/* Краткое аккуратное уведомление об ошибке воспроизведения */}
+      {audioToast && (
+        <div
+          role="alert"
+          className="fixed bottom-20 left-1/2 z-50 -translate-x-1/2 rounded-2xl border border-red-500/40 bg-slate-900/95 px-4 py-2.5 text-xs font-medium text-red-300 shadow-xl backdrop-blur-md"
+        >
+          {audioToast}
+        </div>
+      )}
+
       {/* Верхняя панель управления */}
       <div className={`sticky top-[env(safe-area-inset-top)] z-30 -mx-4 border-b px-4 py-3 backdrop-blur-lg ${
         isDark ? "border-emerald-900/40 bg-slate-950/95" : "border-stone-200 bg-white/95 shadow-sm"
@@ -575,12 +651,17 @@ export default function SurahReaderPage() {
           onClick={togglePlayAll}
           disabled={!surah || loading}
           className={`mt-2.5 flex w-full items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-xs font-semibold transition active:scale-[0.99] disabled:opacity-40 ${
-            playAll && isPlaying
+            playAll && (isPlaying || audioLoading)
               ? "bg-emerald-500 text-slate-950 shadow-lg shadow-emerald-500/20"
               : "border border-emerald-500/40 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
           }`}
         >
-          {playAll && isPlaying ? (
+          {playAll && audioLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Загрузка аудио (аят {activeAyah ?? 1} из {surah?.numberOfAyahs})...
+            </>
+          ) : playAll && isPlaying ? (
             <>
               <Pause className="h-4 w-4 fill-current" />
               Остановить воспроизведение суры (аят {activeAyah ?? 1} из {surah?.numberOfAyahs})
@@ -695,7 +776,9 @@ export default function SurahReaderPage() {
                         aria-label={
                           isCurrentPlaying
                             ? `Пауза аята ${ayah.numberInSurah}`
-                            : `Слушать аят ${ayah.numberInSurah}`
+                            : isCurrentLoading
+                              ? `Загрузка аята ${ayah.numberInSurah}`
+                              : `Слушать аят ${ayah.numberInSurah}`
                         }
                         className={`inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition active:scale-95 ${
                           isCurrentPlaying
